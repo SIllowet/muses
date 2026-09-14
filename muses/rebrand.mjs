@@ -90,6 +90,8 @@ edit("src-tauri/src/lib.rs", [
 edit("src/ui/links.ts", [{ find: "https://github.com/noFAYZ/zuno", replace: REPO }]);
 edit("src-tauri/src/discord_rpc.rs", [
   { find: "https://github.com/noFAYZ/zuno", replace: REPO },
+  // Our own Discord application, so the profile card says Muses rather than Zuno.
+  { find: /const DISCORD_CLIENT_ID: &str = "\d+";/, replace: `const DISCORD_CLIENT_ID: &str = "${brand.discordClientId}";` },
   { find: 'const ACTIVITY_NAME: &str = "Zuno";', replace: `const ACTIVITY_NAME: &str = "${brand.name}";` },
   { find: '"Get Zuno"', replace: `"Get ${brand.name}"` },
 ]);

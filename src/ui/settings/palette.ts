@@ -65,7 +65,8 @@ export async function hydratePalette(): Promise<void> {
 function subscribe(callback: () => void) {
   // `storage` fires in the other window (main <-> mini player) when one of them changes it.
   const onStorage = (event: StorageEvent) => {
-    if (event.key === STORAGE_KEY) applyPalette();
+    if (event.key !== STORAGE_KEY) return;
+    applyPalette();
     callback();
   };
   window.addEventListener(CHANGE_EVENT, callback);
