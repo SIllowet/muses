@@ -25,8 +25,6 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          # A token with `workflow` scope is needed to push merges that touch .github/workflows.
-          token: ${{ secrets.SYNC_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Merge latest upstream release
         id: merge
@@ -48,7 +46,14 @@ jobs:
           if git merge-base --is-ancestor "$upstream_commit" HEAD; then
             echo "Already contains $tag."
             echo "merged=false" >> "$GITHUB_OUTPUT"
-          elif git merge --no-edit -m "Sync upstream Zuno $tag" "$upstream_commit"; then
+          elif git merge --no-commit --no-ff "$upstream_commit"; then
+            # Upstream's own CI/release workflows are disabled here, so their changes are not
+            # needed, and GITHUB_TOKEN is not allowed to push edits under .github/workflows.
+            # Keep our copy of that folder and drop any workflow files upstream added.
+            git restore --source=HEAD --staged --worktree -- .github/workflows
+            git diff --cached --name-only --diff-filter=A -- .github/workflows | xargs -r git rm -q --cached -f --
+            git clean -fdq -- .github/workflows
+            git commit -q --no-edit -m "Sync upstream Zuno $tag"
             git push origin HEAD:main
             echo "merged=true" >> "$GITHUB_OUTPUT"
           else
