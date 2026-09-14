@@ -6,6 +6,7 @@ import "./ui/styles/global.css";
 import { applyPlatformAttributes } from "./ui/platform";
 import MiniPlayer from "./ui/components/mini-player/MiniPlayer";
 import { hydrateMiniPlayerSettings } from "./ui/settings/miniPlayer";
+import { applyPalette, hydratePalette } from "./ui/settings/palette";
 import { applyPaperPcMode, hydratePaperPcMode } from "./ui/settings/paperPcMode";
 import {
   applyRenderEffects,
@@ -23,7 +24,8 @@ applyPlatformAttributes();
  */
 applyPaperPcMode();
 applyRenderEffects();
-void Promise.all([hydrateMiniPlayerSettings(), hydratePaperPcMode(), hydrateRenderEffects()]);
+applyPalette();
+void Promise.all([hydrateMiniPlayerSettings(), hydratePaperPcMode(), hydrateRenderEffects(), hydratePalette()]);
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

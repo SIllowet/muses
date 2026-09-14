@@ -1,5 +1,5 @@
 name: Muses · Release
-run-name: Release ${{ inputs.tag }}
+run-name: Release ${{ inputs.tag || 'next patch' }}
 
 # Builds main as Muses and publishes it. The sync workflow dispatches this for every upstream
 # release; run it by hand (with a new, higher version) to ship our own tweaks in between.
@@ -7,15 +7,15 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Version tag to publish, e.g. v1.4.0. Must be higher than the last release for installs to update.
-        required: true
+        description: Version tag, e.g. v1.4.1. Leave empty to use the next patch after the latest release.
+        required: false
         type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: muses-release-${{ inputs.tag }}
+  group: muses-release
   cancel-in-progress: false
 
 jobs:
@@ -28,12 +28,19 @@ jobs:
         with:
           ref: main
 
-      - name: Set version from tag
+      - name: Resolve version
+        id: version
         shell: bash
         env:
           TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          if test -z "$TAG"; then
+            latest=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
+            TAG=$(node muses/next-version.mjs "v0.0.0" "$latest")
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           version="${TAG#v}"
           node -e '
             const fs = require("fs"), v = process.argv[1];
@@ -69,7 +76,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ inputs.tag }}
+          tagName: ${{ steps.version.outputs.tag }}
           releaseName: Muses __VERSION__
           releaseBody: |
             Muses __VERSION__, built from upstream [Zuno](https://github.com/noFAYZ/zuno) with our changes on top.

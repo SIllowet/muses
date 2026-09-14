@@ -31,8 +31,7 @@ import { DownloadsPanel } from "./DownloadsPanel";
 import { FloatingPanel } from "./FloatingPanel";
 import { NotificationsPanel } from "./NotificationsPanel";
 import { useToolbarItemVisible } from "../settings/toolbarItems";
-import { motion } from "motion/react";
-import appIcon from "../../../assets/img/Logo.png";
+import { MusesMark } from "./MusesMark";
 
 interface TitleBarProps {
   tabs: Tab[];
@@ -211,15 +210,10 @@ export function TitleBar({
         aria-label="Home"
         aria-current={isHomeActive ? "page" : undefined}
       >
-         <motion.img
-          initial={{ opacity: 0, scale: 0.92 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: "spring", stiffness: 260, damping: 24 }}
-          className="size-6 "
-          src={appIcon}
-          alt=""
-        /> 
-        {!hideHomeText && <h3 >zuno_</h3>}
+         <MusesMark className="size-[18px] shrink-0" />
+        {!hideHomeText && (
+          <span className="ml-1.5 text-[15px] font-semibold lowercase tracking-[0.08em]">muses</span>
+        )}
       </button>
 
       <MusicTabs

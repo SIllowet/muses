@@ -1,3 +1,4 @@
+import { PalettePicker } from "../components/PalettePicker";
 import {
   type KeyboardEvent,
   type ReactNode,
@@ -2286,6 +2287,7 @@ export function SettingsPage({
               icon={<PaletteIcon size={18} aria-hidden="true" />}
               description="Applies instantly across both windows."
             />
+            <h3 id="theme-mode-title" className="-mb-2 text-sm font-medium text-foreground">Mode</h3>
 
             <div
               className="grid grid-cols-3 gap-2"
@@ -2330,6 +2332,7 @@ export function SettingsPage({
                 );
               })}
             </div>
+            <PalettePicker />
           </section>
 
           <section className={SETTINGS_CARD} aria-labelledby="toolbar-settings-title">

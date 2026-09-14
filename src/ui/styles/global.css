@@ -15,6 +15,7 @@
 @import "@fontsource-variable/inter";
 @import "tailwindcss";
 @source not "../../../docs";
+@import "./palettes.css";
 
 /*
  * Design tokens consumed by the vendored beUI components.

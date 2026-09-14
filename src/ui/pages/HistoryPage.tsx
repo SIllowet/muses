@@ -10,6 +10,7 @@ import {
   type PlayHistoryEntry,
 } from "../../player/playHistory";
 import { TrackRow } from "../components/TrackRow";
+import { OnRepeat } from "../components/OnRepeat";
 import { useTrackContextMenu } from "../components/TrackContextMenu";
 import { useNowPlaying } from "../hooks/useNowPlaying";
 
@@ -129,6 +130,12 @@ export function HistoryPage({
           {confirmClear ? "Click again to clear" : "Clear history"}
         </button>
       </header>
+
+      <OnRepeat
+        entries={entries}
+        currentTrackId={currentTrackId}
+        onPlay={(track, queue) => void playerController.playTrackById(track.id, queue)}
+      />
 
       {days.map((day) => (
         <section key={day.label} className="flex flex-col gap-2">

@@ -63,22 +63,33 @@ jobs:
             exit 1
           fi
 
-      - name: Build a Muses release if this version is not out yet
+      - name: Build a Muses release if upstream's changes are not shipped yet
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.merge.outputs.tag }}
         run: |
           set -euo pipefail
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Muses $TAG already released."
+          upstream=$(node -p "require('./muses/brand.json').upstream")
+          git fetch -q --no-tags "https://github.com/$upstream.git" "refs/tags/$TAG"
+          upstream_commit=$(git rev-parse "FETCH_HEAD^{commit}")
+          git fetch -q --tags origin
+
+          latest=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
+          if test -n "$latest" && git merge-base --is-ancestor "$upstream_commit" "refs/tags/$latest"; then
+            echo "Muses $latest already includes upstream $TAG."
             exit 0
           fi
-          if gh run list --repo "$GITHUB_REPOSITORY" --workflow muses-release.yml --json displayTitle,status --jq '.[] | select(.status != "completed") | .displayTitle' | grep -qx "Release $TAG"; then
-            echo "A build for $TAG is already running."
+          if gh run list --repo "$GITHUB_REPOSITORY" --workflow muses-release.yml --json status --jq '.[] | select(.status != "completed") | .status' | grep -q .; then
+            echo "A Muses build is already running; the next sync picks this up if it is still missing."
             exit 0
           fi
-          gh workflow run muses-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f tag="$TAG"
+
+          # Upstream's version if it is ahead of ours, otherwise the next patch after our last
+          # release, so installs always see a higher version and tags never collide.
+          next=$(node muses/next-version.mjs "$TAG" "$latest")
+          echo "Releasing Muses $next (upstream $TAG, last Muses ${latest:-none})"
+          gh workflow run muses-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f tag="$next"
 
       - name: Report merge conflict
         if: failure() && steps.merge.outputs.conflict == 'true'
