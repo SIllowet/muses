@@ -1,0 +1,67 @@
+name: Muses · Watch Zuno releases
+
+# Daily: for every Zuno release newer than the one Muses is based on, open an issue listing
+# what changed. It never merges or builds anything. Picking which changes to take is done by
+# hand (cherry-picking the listed commits), then shipped with "Muses · Release".
+on:
+  schedule:
+    - cron: "41 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Open an issue for each new Zuno release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          upstream=$(node -p "require('./muses/brand.json').upstream")
+          base=$(node -p "require('./muses/brand.json').upstreamBase")
+
+          gh label create upstream --repo "$GITHUB_REPOSITORY" --color C9A45C \
+            --description "A Zuno release to review" >/dev/null 2>&1 || true
+
+          # Oldest first, so issues appear in release order and each one diffs from the last.
+          gh release list --repo "$upstream" --exclude-drafts --exclude-pre-releases --limit 30 \
+            --json tagName,publishedAt --jq 'sort_by(.publishedAt) | .[].tagName' > tags.txt
+
+          prev="$base"
+          while read -r tag; do
+            newer=$(node -e '
+              const p = (t) => t.replace(/^v/, "").split("-")[0].split(".").map(Number);
+              const [a, b] = [p(process.argv[1]), p(process.argv[2])];
+              console.log(a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);' "$tag" "$base")
+            if [ "$newer" -le 0 ]; then continue; fi
+
+            title="Zuno $tag is available"
+            if gh issue list --repo "$GITHUB_REPOSITORY" --state all --label upstream \
+                 --search "in:title \"$title\"" --json number --jq '.[0].number' | grep -q .; then
+              prev="$tag"; continue
+            fi
+
+            {
+              echo "Zuno released **$tag**. Muses has **not** changed."
+              echo
+              echo "To review it, ask Claude to \"check the Zuno $tag update\". It will sort the changes into needed / nice to have / skip, and only take the ones you pick."
+              echo
+              echo "## Their release notes"
+              gh release view "$tag" --repo "$upstream" --json body --jq .body || true
+              echo
+              echo "## Commits since $prev"
+              gh api "repos/$upstream/compare/$prev...$tag" \
+                --jq '.commits[] | "- [`\(.sha[0:7])`](\(.html_url)) \(.commit.message | split("\n")[0])"' || true
+            } > body.md
+
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label upstream --body-file body.md
+            prev="$tag"
+          done < tags.txt
