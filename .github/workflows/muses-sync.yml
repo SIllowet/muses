@@ -1,0 +1,97 @@
+name: Muses · Sync upstream
+
+# Every few hours: if noFAYZ/zuno has published a release we have not shipped, merge that
+# release into main (on top of our own commits) and kick off a Muses build for it.
+on:
+  schedule:
+    - cron: "17 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: muses-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          # A token with `workflow` scope is needed to push merges that touch .github/workflows.
+          token: ${{ secrets.SYNC_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Merge latest upstream release
+        id: merge
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          upstream=$(node -p "require('./muses/brand.json').upstream")
+          tag=$(gh release view --repo "$upstream" --json tagName --jq .tagName)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Latest upstream release: $tag"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --no-tags "https://github.com/$upstream.git" "refs/tags/$tag"
+          upstream_commit=$(git rev-parse "FETCH_HEAD^{commit}")
+
+          if git merge-base --is-ancestor "$upstream_commit" HEAD; then
+            echo "Already contains $tag."
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+          elif git merge --no-edit -m "Sync upstream Zuno $tag" "$upstream_commit"; then
+            git push origin HEAD:main
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
+            git merge --abort
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Build a Muses release if this version is not out yet
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.merge.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Muses $TAG already released."
+            exit 0
+          fi
+          if gh run list --repo "$GITHUB_REPOSITORY" --workflow muses-release.yml --status in_progress --json displayTitle --jq '.[].displayTitle' | grep -qx "Release $TAG"; then
+            echo "A build for $TAG is already running."
+            exit 0
+          fi
+          gh workflow run muses-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f tag="$TAG"
+
+      - name: Report merge conflict
+        if: failure() && steps.merge.outputs.conflict == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.merge.outputs.tag }}
+        run: |
+          title="Upstream $TAG does not merge cleanly"
+          if gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" --json number --jq '.[0].number' | grep -q .; then
+            exit 0
+          fi
+          {
+            echo "Our commits on \`main\` conflict with upstream Zuno $TAG, so no Muses build was made."
+            echo
+            echo "Conflicting files:"
+            sed 's/^/- `/; s/$/`/' "$RUNNER_TEMP/conflicts.txt"
+            echo
+            echo "Fix locally: \`git fetch https://github.com/noFAYZ/zuno.git refs/tags/$TAG && git merge FETCH_HEAD\`, resolve, push. The next sync run builds it."
+          } > body.md
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file body.md

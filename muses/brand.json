@@ -1,0 +1,8 @@
+{
+  "name": "Muses",
+  "binary": "muses",
+  "identifier": "com.muses.desktop",
+  "repo": "SIllowet/muses",
+  "upstream": "noFAYZ/zuno",
+  "updaterPubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJCNTZFOUY4RDM4QzI1RTcKUldUbkpZelQrT2xXSzVsdzhPdkFvTFdxUDhuRWUvWlNOR0lwanZ3ck9BZUVoV2NTVFpUNkYxR20K"
+}

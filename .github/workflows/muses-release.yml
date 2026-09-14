@@ -1,0 +1,81 @@
+name: Muses · Release
+run-name: Release ${{ inputs.tag }}
+
+# Builds main as Muses and publishes it. The sync workflow dispatches this for every upstream
+# release; run it by hand (with a new, higher version) to ship our own tweaks in between.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Version tag to publish, e.g. v1.4.0. Must be higher than the last release for installs to update.
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: muses-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set version from tag
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          node -e '
+            const fs = require("fs"), v = process.argv[1];
+            for (const f of ["package.json", "src-tauri/tauri.conf.json"]) {
+              const j = JSON.parse(fs.readFileSync(f, "utf8")); j.version = v;
+              fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
+            }' "$version"
+
+      - name: Apply Muses branding
+        run: node muses/rebrand.mjs
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ inputs.tag }}
+          releaseName: Muses __VERSION__
+          releaseBody: |
+            Muses __VERSION__, built from upstream [Zuno](https://github.com/noFAYZ/zuno) with our changes on top.
+            See the [upstream release notes](https://github.com/noFAYZ/zuno/releases) for what changed.
+          releaseDraft: false
+          prerelease: false
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: --bundles nsis
