@@ -69,7 +69,7 @@ jobs:
             echo "Muses $TAG already released."
             exit 0
           fi
-          if gh run list --repo "$GITHUB_REPOSITORY" --workflow muses-release.yml --status in_progress --json displayTitle --jq '.[].displayTitle' | grep -qx "Release $TAG"; then
+          if gh run list --repo "$GITHUB_REPOSITORY" --workflow muses-release.yml --json displayTitle,status --jq '.[] | select(.status != "completed") | .displayTitle' | grep -qx "Release $TAG"; then
             echo "A build for $TAG is already running."
             exit 0
           fi
